@@ -4,16 +4,8 @@ package discovery
 
 import (
 	"context"
-	"errors"
 	"net"
 	"time"
-)
-
-var (
-	// ErrUndiscoverable indicates a Discoverer cannot use the provided address for discovery
-	ErrUndiscoverable = errors.New("discovery: undiscoverable address")
-	// ErrNotFound indicates that a Discoverer was given a valid network/host address to discover, but didn't find any addresses
-	ErrNotFound = errors.New("discovery: address not found")
 )
 
 // Discoverer looks up the hostname in the service discovery system and returns the Network Address
@@ -23,9 +15,13 @@ type Discoverer interface {
 	// `network` is the name of the network (for example, "tcp", "udp")
 	// `addr` is the address to discover ("example.com:80")
 	//
-	// If the network address is not discoverable by the discoverer, it should return discovery.ErrUndiscoverable
-	// If the network address cannot befound by the Discoverer, it should return discovery.ErrNotFound
+	// If the network address is not discoverable by the discoverer, it should return an error type that implements `BypassDiscovery() bool` and returns `true`
+	// Returning discovery.ErrUndiscoverable will satisfy this requirement
 	Discover(network, addr string) (net.Addr, error)
+}
+
+type bypasser interface {
+	BypassDiscovery() bool
 }
 
 // DiscovererFunc implements Discoverer for functions
@@ -66,7 +62,8 @@ func (d *Dialer) DialContext(ctx context.Context, network, addr string) (net.Con
 	// So use the discoverer to get the network/addr instead
 	naddr, err := d.Discoverer.Discover(network, addr)
 	if err != nil {
-		if err == ErrUndiscoverable { // Bypass the discovery service and dial the address normally
+		if b, ok := err.(bypasser); ok && b.BypassDiscovery() {
+			// Bypass the discovery service and dial the address normally
 			return d.DialerContext(ctx, network, addr)
 		}
 		return nil, err
