@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/jet/go-mantis/retry"
 )
 
 func TestRetryRequesterDefaults(t *testing.T) {
@@ -49,7 +47,9 @@ func TestRetryRequesterBackoff(t *testing.T) {
 	boff := time.Millisecond * 100
 	rr := RetryBackoffRequester{
 		Attempts: 10,
-		Backoff:  Backoff(retry.ConstantBackoff(boff)),
+		Backoff: func(try uint) time.Duration {
+			return boff
+		},
 		ResponseTester: ResponseTesterStatusCodes(DefaultResponseTester, map[int]bool{
 			// Fail but Retryable
 			http.StatusServiceUnavailable:  false,
@@ -90,7 +90,9 @@ func TestRetryRequesterBackoff(t *testing.T) {
 func ExampleRetryBackoffRequester() {
 	rr := RetryBackoffRequester{
 		Attempts: 10,
-		Backoff:  Backoff(retry.ExpontentialRandomBackoff(100*time.Millisecond, 10)),
+		Backoff: func(try uint) time.Duration {
+			return 100 * time.Millisecond
+		},
 		ResponseTester: ResponseTesterStatusCodes(DefaultResponseTester, map[int]bool{
 			// Fail but Retryable
 			http.StatusServiceUnavailable:  false,
